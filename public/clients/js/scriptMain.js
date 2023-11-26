@@ -72,8 +72,8 @@ const setRoom = async () => {
         return;
     }
     const val = await fetchAPI(`http://localhost:3000/api/room/roomNumber/${room}`, "GET");
-    await fetchAPI(`http://localhost:3000/api/users/${user.id}`, "PUT", { roomId: val.id });
-    currentUser = await fetchAPI(`http://localhost:3000/api/users/${user.id}`, "GET");
+    await fetchAPI(`http://localhost:3000/api/users/${user._id}`, "PUT", { roomId: val._id });
+    currentUser = await fetchAPI(`http://localhost:3000/api/users/${user._id}`, "GET");
     const titleRoom = document.getElementById('number_room');
     titleRoom.textContent = `Room ${val.roomNumber}`;
 }
@@ -100,16 +100,14 @@ socket.on("user_disconnect", async (allUsersInRoom) => {
 })
 
 socket.on("send-message", async ({ message, infoUser }) => {
-    isLeft = infoUser.id !== currentUser._id;
-    const date = createDate();
-    chat(infoUser.avatar, infoUser.name, message, isLeft, date);
+    isLeft = infoUser._id !== currentUser._id;
+    chat(infoUser.avatar, infoUser.name, message, isLeft);
 });
 
 socket.on("send-location", async ({ lat, lng, infoUser }) => {
     const linkLocation = `https://www.google.com/maps?q=${lat},${lng}`;
-    isLeft = infoUser.id !== currentUser._id;
-    const date = createDate();
-    chat(infoUser.avatar, infoUser.name, linkLocation, isLeft, date);
+    isLeft = infoUser._id !== currentUser._id;
+    chat(infoUser.avatar, infoUser.name, linkLocation, isLeft);
 });
 
 document
@@ -120,7 +118,7 @@ document
         if (message === "") return;
         const date = createDate();
         await saveMessage(message, currentUser._id, currentUser.roomId, date);
-        socket.emit("send-message", { message, infoUser: { id: currentUser._id, name: currentUser.name, avatar: currentUser.avatar } });
+        socket.emit("send-message", { message, infoUser: { _id: currentUser._id, name: currentUser.name, avatar: currentUser.avatar } });
         document.getElementById("content-message").value = "";
     });
 
@@ -133,7 +131,7 @@ document.getElementById("btn-location").addEventListener("click", async function
             const message = `https://www.google.com/maps?q=${lat},${lng}`;
             const date = createDate();
             await saveMessage(message, currentUser._id, currentUser.roomId, date);
-            socket.emit("send-location", { lat, lng, infoUser: { id: currentUser._id, name: currentUser.name, avatar: currentUser.avatar } });
+            socket.emit("send-location", { lat, lng, infoUser: { _id: currentUser._id, name: currentUser.name, avatar: currentUser.avatar } });
         });
     } else {
         swal({
@@ -149,7 +147,7 @@ const displayUserInRoom = async (allUsersInRoom) => {
     let ul = document.querySelector('.menu-links');
     let s = "";
     allUsersInRoom.forEach((data) => {
-        s += `<li class="nav-link view-profile" data-user-view="${currentUser._id}" data-user-id="${data.id}">
+        s += `<li class="nav-link view-profile" data-user-view="${currentUser._id}" data-user-id="${data._id}">
                 <a href="#">
                     <img class='bx icon' src="${data.avatar}" alt="">
                     <span class="text nav-text">${data.name}</span>
@@ -174,12 +172,9 @@ const getAllMessageByIdRoom = async () => {
 
     // Lấy tất cả các tin nhắn từ phòng chat
     fetchAPI(`http://localhost:3000/api/message/roomNumber/${currentUser.roomId}`, "GET").then((data) => {
-        data.forEach((m) => {
-            const date = new Date(m.createdAt);
-            const time = `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
-            const month = (date.getMonth() + 1).toString().padStart(2, '0');
-            const dateMessage = `${date.getFullYear()}-${month}-${date.getDate()} ${time}`;
-            chat(m.avatar, m.name, m.message, m.id !== currentUser._id, dateMessage);
+        data.forEach((mess) => {
+            const m = mess.userId;
+            chat(m.avatar, m.name, mess.message, m._id !== currentUser._id);
         });
     });
 }
@@ -197,14 +192,13 @@ const hideMessage = async () => {
     chatbox.innerHTML = "";
 }
 
-const chat = async (avatar, nameUser, message, isLeft, date) => {
+const chat = async (avatar, nameUser, message, isLeft) => {
     let div = document.createElement('div');
     if (isLeft) {
         div.className = 'chat__conversation-board__message-container';
     } else {
         div.className = 'chat__conversation-board__message-container reversed';
     }
-    div.innerHTML = `<div class="chat__conversation-board__message__time">${date}</div>`;
     const urlRegex = /^https?:\/\//;
     if (urlRegex.test(message)) {
         div.innerHTML += `<div class="chat__conversation-board__message__person">
@@ -247,132 +241,6 @@ const chat = async (avatar, nameUser, message, isLeft, date) => {
     const chatbox = document.querySelector('.chat__conversation-board');
     chatbox.appendChild(div);
     scrollToBottom();
-}
-
-// chatbot
-$(function () {
-    var INDEX = 0;
-    $("#chat-submit").click(async function (e) {
-        e.preventDefault();
-        var msg = $("#chat-input").val();
-        if (msg.trim() == '') {
-            return false;
-        }
-        generate_message(msg, 'self', currentUser.avatar);
-        generateAnswer(msg).then((data) => {
-            if (data.status === 'success') {
-                generate_message(data.data.outputs[0].text, 'user', 'http://localhost:3000/public/images/chatbot-avatar/chatgpt.jpg');
-            } else {
-                generate_message("I don't understand", 'user', 'http://localhost:3000/public/images/chatbot-avatar/chatgpt.jpg');
-            }
-        });
-    })
-
-    function generate_message(msg, type, avatar) {
-        INDEX++;
-        var str = "";
-        str += "<div id='cm-msg-" + INDEX + "' class=\"chat-msg " + type + "\">";
-        str += "          <span class=\"msg-avatar\">";
-        str += `            <img src= "${avatar}">`;
-        str += "          <\/span>";
-        str += "          <div class=\"cm-msg-text\">";
-        str += "          <\/div>";
-        str += "        <\/div>";
-
-        // Create a new div element and set its innerHTML to the value of str
-        var div = document.createElement('div');
-        div.innerHTML = str;
-
-        // Get the cm-msg-text element
-        var cmMsgText = div.querySelector('.cm-msg-text');
-
-        // Create a text node with the value of msg and append it to the cm-msg-text element
-        var textNode = document.createTextNode(msg);
-        cmMsgText.appendChild(textNode);
-
-        // Append the new div element to the chat-logs element
-        document.querySelector('.chat-logs').appendChild(div);
-
-        $("#cm-msg-" + INDEX).hide().fadeIn(300);
-        if (type == 'self') {
-            $("#chat-input").val('');
-        }
-        $(".chat-logs").stop().animate({ scrollTop: $(".chat-logs")[0].scrollHeight }, 1000);
-    }
-
-    function generate_button_message(msg, buttons) {
-        INDEX++;
-        var btn_obj = buttons.map(function (button) {
-            return "              <li class=\"button\"><a href=\"javascript:;\" class=\"btn btn-primary chat-btn\" chat-value=\"" + button.value + "\">" + button.name + "<\/a><\/li>";
-        }).join('');
-        var str = "";
-        str += "<div id='cm-msg-" + INDEX + "' class=\"chat-msg user\">";
-        str += "          <span class=\"msg-avatar\">";
-        str += `            <img src= "http://localhost:3000/public/images/chatbot-avatar/chatgpt.jpg">`;
-        str += "          <\/span>";
-        str += "          <div class=\"cm-msg-text\">";
-        str += "          <\/div>";
-        str += "          <div class=\"cm-msg-button\">";
-        str += "            <ul>";
-        str += btn_obj;
-        str += "            <\/ul>";
-        str += "          <\/div>";
-        str += "        <\/div>";
-
-        // Create a new div element and set its innerHTML to the value of str
-        var div = document.createElement('div');
-        div.innerHTML = str;
-
-        // Get the cm-msg-text element
-        var cmMsgText = div.querySelector('.cm-msg-text');
-
-        // Create a text node with the value of msg and append it to the cm-msg-text element
-        var textNode = document.createTextNode(msg);
-        cmMsgText.appendChild(textNode);
-
-        // Append the new div element to the chat-logs element
-        document.querySelector('.chat-logs').appendChild(div);
-        $("#cm-msg-" + INDEX).hide().fadeIn(300);
-        $(".chat-logs").stop().animate({ scrollTop: $(".chat-logs")[0].scrollHeight }, 1000);
-        $("#chat-input").attr("disabled", true);
-    }
-
-    $(document).delegate(".chat-btn", "click", function () {
-        var value = $(this).attr("chat-value");
-        var name = $(this).html();
-        $("#chat-input").attr("disabled", false);
-        generate_message(name, 'self');
-    })
-
-    $("#chat-circle").click(function () {
-        $("#chat-circle").toggle('scale');
-        $(".chat-box").toggle('scale');
-    })
-
-    $(".chat-box-toggle").click(function () {
-        $("#chat-circle").toggle('scale');
-        $(".chat-box").toggle('scale');
-    })
-
-})
-
-
-async function generateAnswer(question) {
-    const options = {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            Authorization: 'Bearer gAAAAABk09QiJdKs_-FAV2dEvNDsku-W1jwE7fGPKgnL359OfmMuMzvW59f8EkdW07cNrAHnd22dlvZYdprWt3cn4Z2FBAw4mcsyw_OCT1ZbASn_2HhZPZydo-KNNV2IMU9NAGMtd5tz'
-        },
-        body: `{"max_tokens":512,"mode":"python","model":"icortex-1","n":1,"temperature":0,"text":"${question}"}`
-    };
-    try {
-        const response = await fetch('https://api.textcortex.com/v1/codes', options);
-        const data = await response.json();
-        return data;
-    } catch (error) {
-        return { status: 'error', data: error };
-    }
 }
 
 searchBox.addEventListener('input', function () {

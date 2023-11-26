@@ -1,4 +1,4 @@
-const { User } = require("../models");
+const { User, Room } = require("../models");
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const gravatar = require('gravatar');
@@ -108,35 +108,27 @@ const register = async (req, res) => {
     }
   };
   
-  const getUserByRoom = async (id) => {
+  const getUserByRoom = async (roomNumber) => {
     try {
-      const users = await User.aggregate([
-        {
-          $lookup: {
-            from: 'rooms',
-            localField: 'roomId',
-            foreignField: '_id',
-            as: 'roomInfo',
-          },
-        },
-        {
-          $match: {
-            'roomInfo.roomNumber': id,
-          },
-        },
-        {
-          $project: {
-            _id: 1,
-            name: 1,
-            avatar: 1,
-          },
-        },
-      ]);
-      return users;
+        // Find the room by its room number
+        const room = await Room.findOne({ roomNumber: roomNumber });
+
+        // If the room is not found, return an empty array or handle the error as needed
+        if (!room) {
+            return []; // or handle the error
+        }
+
+        // Use the roomId to find users in that room
+        const users = await User.find({ roomId: room._id })
+            .select('name avatar _id') // Selects only the name, avatar, and id fields
+            .exec();
+
+        return users;
     } catch (error) {
-      console.log(error);
+        console.error(error);
+        throw error; // or handle the error as needed
     }
-  };
+};
   
   const outRoom = async (id) => {
     try {
